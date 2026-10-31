@@ -1,0 +1,28 @@
+{
+  "name": "雨の妖精しずくくん - 雨粒集めと無限進化ゲーム",
+  "short_name": "しずくくん",
+  "description": "雨粒をおちょこ傘で集めて、可愛いしずくくんを無限に進化させよう！ほんわか癒やし系雨の日ゲーム「雨の妖精しずくくん」",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0a192f",
+  "theme_color": "#38bdf8",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

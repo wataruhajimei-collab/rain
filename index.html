@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="雨粒をおちょこ傘で集めて、可愛いしずくくんを無限に進化させよう！ほんわか癒やし系雨の日ゲーム「雨の妖精しずくくん」">
+  <title>雨の妖精しずくくん - 雨粒集めと無限進化ゲーム</title>
+
+  <!-- スマホのホーム画面用アプリアイコン & PWA設定 -->
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="icon" type="image/png" sizes="64x64" href="favicon.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#38bdf8">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="しずくくん">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&family=Quicksand:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=11">
+</head>
+<body>
+  <!-- 縦向きスマートフォン用の案内オーバーレイ -->
+  <div id="orientation-overlay" class="orientation-overlay">
+    <div class="orientation-card">
+      <div class="phone-rotate-icon">
+        <svg viewBox="0 0 100 100" class="rotate-svg">
+          <rect x="30" y="15" width="40" height="70" rx="6" fill="none" stroke="currentColor" stroke-width="4"/>
+          <circle cx="50" cy="77" r="3" fill="currentColor"/>
+          <path d="M78 35 A30 30 0 0 1 82 58" fill="none" stroke="#60a5fa" stroke-width="4" stroke-linecap="round"/>
+          <polyline points="76,60 84,62 86,52" fill="none" stroke="#60a5fa" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h2>画面をよこにしてね</h2>
+      <p>「雨の妖精しずくくん」は横画面でたのしむゲームです。端末を横向きに回転させてください♪</p>
+    </div>
+  </div>
+
+  <!-- メインゲームラッパー -->
+  <div id="game-wrapper" class="game-wrapper">
+    <!-- ヘッダー情報 -->
+    <header class="game-header">
+      <div class="title-badge">
+        <span class="sparkle-icon">🌧️</span>
+        <h1 class="game-title">雨の妖精しずくくん</h1>
+      </div>
+
+      <div class="header-controls">
+        <button id="btn-sound" class="icon-btn" title="BGM・効果音ON/OFF" aria-label="サウンド切り替え">
+          <span id="sound-icon">🎵 ON</span>
+        </button>
+        <button id="btn-ranking" class="icon-btn ranking-nav-btn" title="全国ランキング" aria-label="ランキングを開く">
+          <span>🏆 ランキング</span>
+        </button>
+        <button id="btn-book" class="icon-btn" title="しずくくんの進化のきろく" aria-label="図鑑を開く">
+          <span>📖 図鑑</span>
+        </button>
+        <button id="btn-fullscreen" class="icon-btn" title="全画面表示" aria-label="全画面表示">
+          <span>⛶ 拡大</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- メインステージ（Canvas） -->
+    <div class="stage-container" id="stage-container">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- 画面上部統合HUDバー（スマホでも絶対に重ならないフレックス配置） -->
+      <div class="top-hud-bar">
+        <!-- 傘の雨粒ストック -->
+        <div id="umbrella-hud" class="hud-card umbrella-hud">
+          <span class="hud-label">かさ</span>
+          <div class="drops-container" id="drops-meter"></div>
+          <div class="drop-counter"><span id="current-drops">0</span>/10</div>
+        </div>
+
+        <!-- ライフ＆ゴージャス -->
+        <div class="hud-card status-hud">
+          <div class="life-box">
+            <span class="hud-tag">ライフ</span>
+            <div class="life-icons" id="life-icons">
+              <span class="life-drop active">💧</span>
+              <span class="life-drop active">💧</span>
+              <span class="life-drop active">💧</span>
+              <span class="life-drop active">💧</span>
+              <span class="life-drop active">💧</span>
+            </div>
+          </div>
+          <div class="gorgeous-box" title="金色の雨粒">
+            <span class="gorgeous-icon">👑</span>
+            <span class="gorgeous-val" id="gorgeous-val">0</span>
+          </div>
+        </div>
+
+        <!-- しずくくんステータス -->
+        <div id="shizuku-panel" class="hud-card shizuku-panel">
+          <div class="shizuku-badge">
+            <span class="shizuku-level-tag">Lv.<span id="shizuku-level">1</span></span>
+            <span class="shizuku-title" id="shizuku-title">ちいさなしずく</span>
+          </div>
+          <div class="exp-bar-wrapper">
+            <div class="exp-bar" id="exp-bar" style="width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 進化メッセージトースト -->
+      <div id="evolution-toast" class="evolution-toast hidden">
+        <div class="evolution-banner">
+          <div class="evolution-stars">✨ 🌟 ✨</div>
+          <div class="evolution-label">SHIZUKU EVOLVED!</div>
+          <div class="evolution-new-name" id="toast-new-name">ぷにぷにしずく</div>
+          <div class="evolution-desc" id="toast-desc">なんだか少しぷるぷるしてきた！</div>
+        </div>
+      </div>
+
+      <!-- 操作オーバーレイ（半透明コンパクト左右ボタン） -->
+      <div class="controls-overlay">
+        <button id="btn-left" class="control-btn left-btn" aria-label="左へ動く">
+          <span class="btn-arrow">◀</span>
+        </button>
+        <button id="btn-right" class="control-btn right-btn" aria-label="右へ動く">
+          <span class="btn-arrow">▶</span>
+        </button>
+      </div>
+      <!-- タイトル画面オーバーレイ -->
+      <div id="title-screen" class="title-screen">
+        <div class="title-card">
+          <div class="title-card-col title-left-col">
+            <div class="title-emblem">
+              <span class="title-cloud-icon">🌧️</span>
+              <span class="title-sparkle">✨</span>
+              <span class="title-shizuku-icon">💧</span>
+            </div>
+            <div class="title-text-group">
+              <h1 class="title-main-logo">雨の妖精しずくくん</h1>
+              <p class="title-sub-logo">〜 雨粒集めと無限進化ゲーム 〜</p>
+            </div>
+
+            <!-- プレイヤー名前設定 -->
+            <div class="title-name-box">
+              <label for="title-name-input" class="title-name-label">
+                <span class="name-icon">👤</span> プレイヤー名
+              </label>
+              <div class="title-name-input-wrapper">
+                <input type="text" id="title-name-input" maxlength="12" placeholder="なまえ（12文字まで）" autocomplete="off">
+              </div>
+              <span class="title-name-hint">※全国ランキングにこの名前で登録されます</span>
+            </div>
+          </div>
+
+          <div class="title-card-col title-right-col">
+            <!-- メインメニューボタン群 -->
+            <div class="title-menu-actions">
+              <button id="btn-title-start" class="title-btn title-btn-start" aria-label="ゲームスタート">
+                <span class="btn-icon">▶</span>
+                <span class="btn-text">ゲームスタート</span>
+              </button>
+              <div class="title-sub-buttons">
+                <button id="btn-title-howto" class="title-btn title-btn-sub" aria-label="あそびかた">
+                  <span class="btn-icon">📖</span>
+                  <span class="btn-text">あそびかた</span>
+                </button>
+                <button id="btn-title-ranking" class="title-btn title-btn-sub" aria-label="全国ランキング">
+                  <span class="btn-icon">🏆</span>
+                  <span class="btn-text">Ranking</span>
+                </button>
+                <button id="btn-title-book" class="title-btn title-btn-sub" aria-label="進化図鑑">
+                  <span class="btn-icon">📚</span>
+                  <span class="btn-text">進化図鑑</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- あそびかたモーダル -->
+  <div id="howto-modal" class="modal hidden">
+    <div class="modal-backdrop" id="howto-modal-backdrop"></div>
+    <div class="modal-card howto-card">
+      <div class="modal-header">
+        <h2>📖 ゲームのあそびかた</h2>
+        <button id="btn-close-howto" class="close-btn" aria-label="閉じる">✕</button>
+      </div>
+      <div class="modal-body howto-body">
+        <div class="howto-steps">
+          <div class="howto-step-card">
+            <div class="step-num">1</div>
+            <div class="step-icon">☂️</div>
+            <div class="step-content">
+              <h3>おちょこ傘で雨粒キャッチ！</h3>
+              <p>画面下の左右ボタン（またはキーボードの ◀ ▶ / A・D）で少女を6マス移動。ひっくり返ったおちょこ傘の中心で、落ちてくる雨粒を受け止めよう！</p>
+            </div>
+          </div>
+          <div class="howto-step-card">
+            <div class="step-num">2</div>
+            <div class="step-icon">🧪</div>
+            <div class="step-content">
+              <h3>10粒ためて水やり＆街と木が進化！</h3>
+              <p>10粒たまると命の樹へ水やり！1面クリアするごとに、背景の街が「石器時代」から「未来都市」へと徐々に進化していきます！</p>
+            </div>
+          </div>
+          <div class="howto-step-card">
+            <div class="step-num">3</div>
+            <div class="step-icon">🖤</div>
+            <div class="step-content">
+              <h3>金の雨粒とキケンな「墨汁」</h3>
+              <p>金色の雨粒でゴージャス進化！逆に時々落ちてくる黒い「墨汁」はスルーしてOK！取ってしまうと水が汚染されてダークキャラになり、木もいびつに育ちます。</p>
+            </div>
+          </div>
+          <div class="howto-step-card">
+            <div class="step-num">4</div>
+            <div class="step-icon">💧</div>
+            <div class="step-content">
+              <h3>5回地面に落とすとゲームオーバー</h3>
+              <p>雨粒を地面に落とすとライフが減ってしまいます（全5個）。面が進むほど雨のスピードと激しさが増していくよ！</p>
+            </div>
+          </div>
+        </div>
+        <div class="howto-footer-action">
+          <button id="btn-howto-close-bottom" class="secondary-btn howto-close-btn">
+            <span>とじる（画面の外を押しても戻れます）</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 図鑑・進化の記録モーダル -->
+  <!-- 図鑑・進化の記録モーダル -->
+  <div id="book-modal" class="modal hidden">
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div class="modal-card book-card-modal">
+      <div class="modal-header">
+        <h2>📖 しずくくんの進化の記録</h2>
+        <button id="btn-close-modal" class="close-btn" aria-label="閉じる">✕</button>
+      </div>
+      <div class="modal-body book-modal-body">
+        <div class="current-shizuku-preview">
+          <div class="preview-canvas-box">
+            <canvas id="preview-canvas" width="240" height="240"></canvas>
+          </div>
+          <div class="preview-info">
+            <div class="preview-badge-row">
+              <span class="preview-type-badge" id="modal-type-badge">💧 清流系</span>
+              <span class="preview-lv-badge">Lv.<span id="modal-lv">1</span></span>
+            </div>
+            <div class="preview-name" id="modal-name">ちいさなしずく</div>
+            <div class="preview-condition" id="modal-condition">✨ ゲーム開始時のすがた</div>
+            <div class="preview-desc" id="modal-desc">ぽたんと生まれたての小さな雨の妖精。</div>
+            <div class="preview-total">あつめた雨粒の総数: <span id="modal-total-drops">0</span> つぶ</div>
+            <div class="preview-quote" id="modal-quote">「ぽたぽた、雨の音がだいすきだよ。」</div>
+          </div>
+        </div>
+        <div class="history-section-header">
+          <h3 class="history-title">📚 これまでの進化のすがた（タップでプレビュー）</h3>
+          <span class="history-count-badge" id="history-count-badge">1 種類</span>
+        </div>
+        <div class="history-list book-grid" id="history-list">
+          <!-- 過去の進化カードがグリッドで並ぶ -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ゲームオーバーモーダル -->
+  <div id="gameover-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card gameover-card">
+      <div class="gameover-header">
+        <div class="gameover-icon">🌧️💦</div>
+        <h2>雨粒がこぼれちゃった…！</h2>
+        <p>雨粒を5回地面に落としてしまいました</p>
+      </div>
+      <div class="gameover-body">
+        <div class="gameover-stats">
+          <div class="stat-box">
+            <span class="stat-label">しずくくんの最終進化</span>
+            <span class="stat-value" id="go-shizuku-name">ちいさなしずく</span>
+            <span class="stat-sub" id="go-shizuku-lv">Lv.1</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">あつめた雨粒の数</span>
+            <span class="stat-value" id="go-drops-count">0</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">ゴージャス度 (金色雨粒)</span>
+            <span class="stat-value gold" id="go-gold-count">0</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">育った命の樹 (フィボナッチ)</span>
+            <span class="stat-value" id="go-tree-level">芽生え</span>
+          </div>
+        </div>
+        <!-- ランキング登録フォーム -->
+        <div class="ranking-register-box">
+          <div class="register-title">🏆 全国ランキングにスコアを登録</div>
+          <div class="register-input-row">
+            <input type="text" id="player-name-input" maxlength="12" placeholder="なまえ（12文字まで）" autocomplete="off">
+            <button id="btn-submit-score" class="submit-score-btn">登録する</button>
+          </div>
+          <div id="submit-status-msg" class="submit-status-msg"></div>
+        </div>
+
+        <div class="gameover-actions">
+          <button id="btn-restart" class="restart-btn">
+            <span>もう一度あそぶ 🌈</span>
+          </button>
+          <button id="btn-view-ranking-go" class="secondary-btn">
+            <span>🏆 ランキング</span>
+          </button>
+          <button id="btn-return-title-go" class="secondary-btn">
+            <span>🏠 タイトルへ</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 全国オンラインランキングモーダル -->
+  <div id="ranking-modal" class="modal hidden">
+    <div class="modal-backdrop" id="ranking-modal-backdrop"></div>
+    <div class="modal-card ranking-modal-card">
+      <div class="modal-header">
+        <div class="ranking-header-title">
+          <h2>🏆 全国しずくランキング</h2>
+          <span class="ranking-badge-tag" id="ranking-status-tag">接続確認中...</span>
+        </div>
+        <button id="btn-close-ranking" class="close-btn" aria-label="閉じる">✕</button>
+      </div>
+      <div class="modal-body ranking-modal-body">
+        <div class="ranking-table-container">
+          <table class="ranking-table">
+            <thead>
+              <tr>
+                <th class="col-rank">順位</th>
+                <th class="col-name">名前</th>
+                <th class="col-shizuku">到達したしずくくん</th>
+                <th class="col-drops">集めた雨粒</th>
+                <th class="col-gold">ゴージャス</th>
+                <th class="col-date">日付</th>
+              </tr>
+            </thead>
+            <tbody id="ranking-tbody">
+              <tr>
+                <td colspan="6" class="ranking-loading">ランキングを読み込み中...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js?v=11"></script>
+</body>
+</html>

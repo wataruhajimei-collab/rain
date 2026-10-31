@@ -1,0 +1,7 @@
+.git
+.github
+*.md
+push.ps1
+worker.js
+scratch
+*.tmp
