@@ -21,3 +21,4 @@ if (-not $status) {
 Write-Host "Pushing to GitHub..."
 & $git push origin main
 Write-Host "Push complete! Cloudflare deployment triggered."
+

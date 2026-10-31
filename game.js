@@ -479,7 +479,7 @@ function getTreeGrowthName(level) {
   return `黄金比の超霊樹 (${getFibonacci(level)}枝)`;
 }
 
-// ステージ（レベル）ごとの街・文明の進化名称（1面クリアごとに石器時代〜未来都市へ発展）
+// ステージ（レベル）ごとの街・文明の進化名称（1面クリアごとに石器時代〜未来都市、さらに宇宙・銀河・高次元文明へ発展）
 function getCivilizationName(level) {
   if (level <= 1) return "🪨 石器時代";
   if (level === 2) return "🏺 縄文・弥生集落";
@@ -491,7 +491,16 @@ function getCivilizationName(level) {
   if (level === 8) return "🏙️ 現代メトロポリス";
   if (level === 9) return "🚄 近未来スマートシティ";
   if (level === 10) return "🛸 超未来サイバー都市";
-  return `🌌 星間未来都市 Lv.${level}`;
+  if (level === 11) return "☁️ 成層圏・空中庭園都市";
+  if (level === 12) return "🌙 月面開拓・ルナコロニー";
+  if (level === 13) return "🪐 火星緑化・テラフォーミング都市";
+  if (level === 14) return "🛰️ 軌道環・スペースコロニー";
+  if (level === 15) return "⚡ 木星軌道・フローティング都市";
+  if (level === 16) return "🚀 恒星間・ワープゲート都市";
+  if (level === 17) return "☀️ ダイソン・スフィア文明";
+  if (level === 18) return "🌌 星雲・ネビュラクリスタル都市";
+  if (level === 19) return "✨ 高次元・クォンタム神都";
+  return `👑 銀河連邦・コズミック神都 第${level - 19}星系`;
 }
 
 // ==========================================
@@ -904,7 +913,8 @@ const GORGEOUS_PREFIXES = ["シャイニー", "黄金の", "煌めく", "ロイ�
  * 条件ごとに多岐に枝分かれする進化データを取得
  */
 function getEvolutionData(level, goldDrops = 0, totalDrops = 0, totalMisses = 0, levelGoldDrops = 0, levelMisses = 0, inkDrops = 0, levelInkDrops = 0) {
-  const isPolluted = levelInkDrops > 0 || (inkDrops > 0 && totalDrops > 0 && (inkDrops / totalDrops) >= 0.12);
+  // ★要件: 現在のビーカーの水に墨汁が入っているとき（levelInkDrops > 0）にしずくくんがダークになり、墨汁のない水を集めれば浄化される
+  const isPolluted = levelInkDrops > 0;
 
   if (level <= 1) {
     if (isPolluted && BRANCH_EVOLUTIONS[1].dark) {
@@ -1119,7 +1129,8 @@ class RainGame {
       levelMisses: 0,   // 現在のレベルで落とした雨粒数
       levelGoldDrops: 0,// 現在のレベルで集めた黄色雨粒数
       levelInkDrops: 0, // 現在のレベルで集めてしまった墨汁数
-      treeInkLevel: 0,  // 木の墨汁汚染レベル
+      beakerInkDrops: 0,// 現在ビーカーに入っている墨汁の量（木に水を注ぐまで保持）
+      treeInkLevel: 0,  // 木の墨汁汚染度（0.0 = 清浄 〜 1.0 = 重度汚染）
       currentBranch: 'aqua',
       isGameOver: false,
       history: []
@@ -1345,6 +1356,7 @@ class RainGame {
     this.state.inkDrops = 0;
     this.state.levelGoldDrops = 0;
     this.state.levelInkDrops = 0;
+    this.state.beakerInkDrops = 0;
     this.state.treeInkLevel = 0;
     this.state.expInLevel = 0;
     this.state.lives = 5;
@@ -1814,6 +1826,7 @@ class RainGame {
     this.state.inkDrops = 0;
     this.state.levelGoldDrops = 0;
     this.state.levelInkDrops = 0;
+    this.state.beakerInkDrops = 0;
     this.state.treeInkLevel = 0;
     this.state.totalMisses = 0;
     this.state.levelMisses = 0;
@@ -1858,6 +1871,7 @@ class RainGame {
     this.state.inkDrops = 0;
     this.state.levelGoldDrops = 0;
     this.state.levelInkDrops = 0;
+    this.state.beakerInkDrops = 0;
     this.state.treeInkLevel = 0;
     this.state.totalMisses = 0;
     this.state.levelMisses = 0;
@@ -2340,9 +2354,11 @@ class RainGame {
   }
 
   update(dt) {
+    const frameScale = Math.min(3.0, Math.max(0.5, dt * 60));
+
     // 雲の移動と空の時間帯サイクル（タイトル画面でも生きた美しい背景を演出）
     this.clouds.forEach(c => {
-      c.x += c.speed;
+      c.x += c.speed * frameScale;
       if (c.x > this.width + 100) c.x = -120;
     });
     this.skyTime = (this.skyTime + dt * 0.012) % 1.0;
@@ -2363,12 +2379,13 @@ class RainGame {
       }
     }
 
-    // 2. 少女のスムーズなレーン移動補間（傘の中心がレーンに合うようオフセット）
+    // 2. 少女のスムーズなレーン移動補間（フレームレート非依存で常に一定速度でキビキビ移動）
     const umbrellaOffset = (this.girl.direction === 1 ? 24 : -24) * (this.gameScale || 1.0);
     const targetX = this.lanes[this.girl.currentLane] - umbrellaOffset;
     const diff = targetX - this.girl.x;
     if (Math.abs(diff) > 1) {
-      this.girl.x += diff * 0.28;
+      const lerpFactor = 1 - Math.pow(1 - 0.28, frameScale);
+      this.girl.x += diff * lerpFactor;
       this.girl.walkCycle += dt * 12;
     } else {
       this.girl.x = targetX;
@@ -2492,11 +2509,11 @@ class RainGame {
       // 水パーティクルの更新
       for (let i = pa.waterParticles.length - 1; i >= 0; i--) {
         const wp = pa.waterParticles[i];
-        wp.x += wp.vx;
-        wp.y += wp.vy;
-        wp.vy += 0.18; // 重力
-        wp.life--;
-        wp.alpha = wp.life / 42;
+        wp.x += wp.vx * frameScale;
+        wp.y += wp.vy * frameScale;
+        wp.vy += 0.18 * frameScale; // 重力
+        wp.life -= frameScale;
+        wp.alpha = Math.max(0, wp.life / 42);
         if (wp.life <= 0) pa.waterParticles.splice(i, 1);
       }
     }
@@ -2560,9 +2577,9 @@ class RainGame {
     for (let i = this.raindrops.length - 1; i >= 0; i--) {
       const drop = this.raindrops[i];
       if (!drop) continue;
-      // プレート表示中は雨粒の落下も一時停止
+      // プレート表示中は雨粒の落下も一時停止（フレームレートに依存せず常に一定の落下速度を維持）
       if (!isPausedForPlate) {
-        drop.y += drop.vy;
+        drop.y += drop.vy * frameScale;
         drop.wobble += dt * 8;
       }
 
@@ -2639,18 +2656,18 @@ class RainGame {
       }
     }
 
-    this.beaker.waterLevel += (this.beaker.targetWaterLevel - this.beaker.waterLevel) * 0.05;
+    this.beaker.waterLevel += (this.beaker.targetWaterLevel - this.beaker.waterLevel) * Math.min(1, 0.05 * frameScale);
     this.updateShizuku(dt);
 
     // パーティクル更新
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.life--;
-      p.alpha = p.life / (p.maxLife || 30);
+      p.x += p.vx * frameScale;
+      p.y += p.vy * frameScale;
+      p.life -= frameScale;
+      p.alpha = Math.max(0, p.life / (p.maxLife || 30));
       if (p.type === 'ripple') {
-        p.radius += 0.6;
+        p.radius += 0.6 * frameScale;
       }
       if (p.life <= 0) {
         this.particles.splice(i, 1);
@@ -2786,10 +2803,11 @@ class RainGame {
     this.state.totalDrops++;
     this.state.currentDrops++;
     if (drop.isInk) {
-      // ★要件: 墨汁を取ってしまうとビーカーの水が汚染され、しずくくんがダークになり、木も不健全な育ち方になる
+      // ★要件: 黒い雨粒を拾った瞬間には木は邪悪にせず、ビーカーの水が墨汁の量に比例して汚染される！
+      // （汚染された水を木にやった時に初めて木が汚染される）
       this.state.inkDrops = (this.state.inkDrops || 0) + 1;
       this.state.levelInkDrops = (this.state.levelInkDrops || 0) + 1;
-      this.state.treeInkLevel = (this.state.treeInkLevel || 0) + 1;
+      this.state.beakerInkDrops = (this.state.beakerInkDrops || 0) + 1;
       this.state.currentBranch = 'dark';
       this.sound.playCatchInk();
 
@@ -2887,9 +2905,10 @@ class RainGame {
     pa.beakerW = this.beaker.width;
     pa.beakerH = this.beaker.height;
     pa.goldRatio = this.getGoldRatio();
+    pa.pouredInkDrops = this.state.beakerInkDrops || 0;
     pa.inkRatio = this.getInkRatio();
-    pa.isGold = pa.goldRatio > 0.4 && pa.inkRatio < 0.1;
-    pa.isInk = pa.inkRatio >= 0.1;
+    pa.isGold = pa.goldRatio > 0.4 && pa.inkRatio < 0.05;
+    pa.isInk = pa.inkRatio >= 0.05;
     pa.waterParticles = [];
 
     // 空中に残っている雨粒を優しい水しぶきに変えてクリア（見えない雨粒が地表に落ちる事故を完全防止）
@@ -2969,6 +2988,7 @@ class RainGame {
 
   // 現在のプレイスタイル（落とした雨粒、黄色比率、墨汁汚染）に応じた進化データを取得
   getCurrentEvolutionData(level = this.state.level) {
+    const activeInk = (this.state.levelInkDrops || 0) + (this.state.beakerInkDrops || 0) + (this.state.currentBranch === 'dark' ? 1 : 0);
     return getEvolutionData(
       level,
       this.state.goldDrops,
@@ -2977,15 +2997,24 @@ class RainGame {
       this.state.levelGoldDrops || 0,
       this.state.levelMisses || 0,
       this.state.inkDrops || 0,
-      this.state.levelInkDrops || 0
+      activeInk
     );
   }
 
   evolveShizuku() {
     this.state.level++;
-    // プレイスタイル（落とした雨粒、黄色比率、墨汁汚染）に応じた枝分かれ進化を判定
-    const hadInkThisLevel = (this.state.levelInkDrops || 0) > 0;
-    const data = this.getCurrentEvolutionData();
+    // プレイスタイル（落とした雨粒、黄色比率、今ステージの墨汁汚染）に応じた枝分かれ進化を判定
+    // 今ステージで墨汁を拾わなければ（levelInkDrops === 0）清浄な進化ルートへ復帰！
+    const data = getEvolutionData(
+      this.state.level,
+      this.state.goldDrops,
+      this.state.totalDrops,
+      this.state.totalMisses || 0,
+      this.state.levelGoldDrops || 0,
+      this.state.levelMisses || 0,
+      this.state.inkDrops || 0,
+      this.state.levelInkDrops || 0
+    );
     this.state.currentBranch = data.type;
 
     // 姿や属性を含む進化履歴オブジェクトを記録（図鑑でいつでも描画可能にする）
@@ -3005,13 +3034,10 @@ class RainGame {
       date: new Date().toLocaleDateString('ja-JP')
     });
 
-    // 次レベル用のステージ集計カウンタをリセット（墨汁を取らずにクリアできた場合は木の汚染も少しずつ浄化）
+    // 次レベル用のステージ集計カウンタをリセット（ビーカー内の墨汁量 beakerInkDrops は木に水を注ぎ終えるまで保持）
     this.state.levelMisses = 0;
     this.state.levelGoldDrops = 0;
     this.state.levelInkDrops = 0;
-    if (!hadInkThisLevel && (this.state.treeInkLevel || 0) > 0) {
-      this.state.treeInkLevel = Math.max(0, this.state.treeInkLevel - 1);
-    }
 
     this.sound.playEvolutionFanfare();
 
@@ -3054,16 +3080,42 @@ class RainGame {
     this.saveData();
   }
 
-  // ★要件: ビーカーの水を注いだあとに木が育つ演出
+  // ★要件: ビーカーの水を注いだあとに木が育つ＆水質に応じて木が汚染または徐々に浄化される演出
   triggerTreeGrowth() {
     this.state.treeLevel = (this.state.treeLevel || this.state.level) + 1;
     this.treeGrowthAnim = { active: true, timer: 0, duration: 1.0 };
     this.sound.playTreeGrow();
 
-    // 木の周囲に瑞々しい若葉と生命の光パーティクルを吹き出させる
+    // ★要件: 汚染された水をやった木は墨汁の量に比例して汚染され、墨汁のない水を与えれば木は徐々に浄化される！
+    const pouredInk = (this.pourAnim && this.pourAnim.pouredInkDrops !== undefined)
+      ? this.pourAnim.pouredInkDrops
+      : (this.state.beakerInkDrops || 0);
+
+    let isPurified = false;
+    if (pouredInk > 0) {
+      // ビーカー内の墨汁の量に比例して木が汚染される（1滴あたり+0.30、最大1.0）
+      this.state.treeInkLevel = Math.min(1.0, (this.state.treeInkLevel || 0) + pouredInk * 0.30);
+    } else if ((this.state.treeInkLevel || 0) > 0) {
+      // 墨汁のないきれいな水を与えたので、木が徐々に浄化される（1回の水やりで-0.35ずつ浄化）
+      this.state.treeInkLevel = Math.max(0, (this.state.treeInkLevel || 0) - 0.35);
+      isPurified = true;
+    }
+
+    // 水を木に注ぎ終えたのでビーカー内の墨汁カウントをリセット（新しい綺麗なビーカーに戻る）
+    this.state.beakerInkDrops = 0;
+    if (this.pourAnim) {
+      this.pourAnim.pouredInkDrops = 0;
+    }
+
+    // 木の周囲に瑞々しい若葉（または汚染・浄化の光）パーティクルを吹き出させる
     const groundY = this.getGroundY();
     const treeX = this.getTreeX();
     const scale = this.gameScale || 1.0;
+    const palette = pouredInk > 0
+      ? ['#4c1d95', '#7e22ce', '#1e1b2e', '#c084fc', '#ef4444']
+      : isPurified
+      ? ['#38bdf8', '#67e8f9', '#a7f3d0', '#34d399', '#ffffff', '#fef08a']
+      : ['#10b981', '#34d399', '#a7f3d0', '#facc15', '#67e8f9', '#ffffff'];
 
     for (let i = 0; i < 35; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -3074,7 +3126,7 @@ class RainGame {
         vx: Math.cos(angle) * speed,
         vy: -Math.abs(Math.sin(angle) * speed) - 2 * scale,
         radius: (Math.random() * 4 + 2.5) * scale,
-        color: ['#10b981', '#34d399', '#a7f3d0', '#facc15', '#67e8f9', '#ffffff'][Math.floor(Math.random() * 6)],
+        color: palette[Math.floor(Math.random() * palette.length)],
         type: 'leaf',
         alpha: 1,
         life: 50 + Math.floor(Math.random() * 25)
@@ -3787,7 +3839,7 @@ class RainGame {
         ctx.stroke();
       });
 
-      // 空中浮遊ドーム都市（Lv11以上でさらに増加）
+      // 空中浮遊ドーム都市（Lv10〜）
       const numDomes = Math.min(4, 1 + Math.floor((level - 9) / 2));
       for (let d = 0; d < numDomes; d++) {
         const dx = w * (0.16 + d * 0.22);
@@ -3831,6 +3883,272 @@ class RainGame {
         ctx.beginPath();
         ctx.arc(carX, carY, 2.2 * s, 0, Math.PI * 2);
         ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // --- ★要件: Lv.11以降も1面クリアするごとに街・文明が宇宙規模へとさらに進化し続ける！ ---
+    // Lv.11: 成層圏・空中庭園都市（天空の緑化浮島＆光の滝）
+    if (level >= 11) {
+      ctx.save();
+      const gardenIslands = [
+        { x: w * 0.28, y: groundY - 165 * s, r: 22 * s },
+        { x: w * 0.72, y: groundY - 172 * s, r: 24 * s }
+      ];
+      gardenIslands.forEach((isl, idx) => {
+        const fy = isl.y + Math.sin(now * 1.4 + idx * 2) * 4 * s;
+        // 浮島から流れ落ちる光の滝（スカイウォーターフォール）
+        const wfGrad = ctx.createLinearGradient(isl.x, fy, isl.x, fy + 45 * s);
+        wfGrad.addColorStop(0, 'rgba(103, 232, 249, 0.65)');
+        wfGrad.addColorStop(1, 'rgba(103, 232, 249, 0)');
+        ctx.fillStyle = wfGrad;
+        ctx.fillRect(isl.x - 4 * s, fy, 8 * s, 45 * s);
+        // 浮島の岩盤（逆円錐）
+        ctx.fillStyle = '#475569';
+        ctx.beginPath();
+        ctx.moveTo(isl.x - isl.r, fy);
+        ctx.lineTo(isl.x, fy + 16 * s);
+        ctx.lineTo(isl.x + isl.r, fy);
+        ctx.closePath();
+        ctx.fill();
+        // 空中庭園の緑とクリスタル尖塔
+        ctx.fillStyle = '#10b981';
+        ctx.beginPath();
+        ctx.ellipse(isl.x, fy, isl.r * 1.05, 5 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#a7f3d0';
+        ctx.beginPath();
+        ctx.moveTo(isl.x - 5 * s, fy);
+        ctx.lineTo(isl.x, fy - 18 * s);
+        ctx.lineTo(isl.x + 5 * s, fy);
+        ctx.closePath();
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+
+    // Lv.12: 月面開拓・ルナコロニー（上空に浮かぶ巨大月面都市とクレータードーム光）
+    if (level >= 12) {
+      ctx.save();
+      const moonX = w * 0.14;
+      const moonY = Math.max(82 * s, groundY - 210 * s);
+      const moonR = 28 * s;
+      // 月の本体
+      const mGrad = ctx.createRadialGradient(moonX - 6 * s, moonY - 6 * s, 4 * s, moonX, moonY, moonR);
+      mGrad.addColorStop(0, 'rgba(248, 250, 252, 0.92)');
+      mGrad.addColorStop(0.7, 'rgba(203, 213, 225, 0.85)');
+      mGrad.addColorStop(1, 'rgba(100, 116, 139, 0.70)');
+      ctx.fillStyle = mGrad;
+      ctx.beginPath();
+      ctx.arc(moonX, moonY, moonR, 0, Math.PI * 2);
+      ctx.fill();
+      // 月面都市の幾何学ライトグリッド＆ルナドーム
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
+      ctx.lineWidth = 1.2 * s;
+      ctx.beginPath();
+      ctx.arc(moonX + 5 * s, moonY + 4 * s, 9 * s, 0, Math.PI * 2);
+      ctx.moveTo(moonX - 12 * s, moonY - 4 * s);
+      ctx.lineTo(moonX + 14 * s, moonY + 4 * s);
+      ctx.stroke();
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.arc(moonX + 5 * s, moonY + 4 * s, 2.2 * s, 0, Math.PI * 2);
+      ctx.arc(moonX - 8 * s, moonY - 3 * s, 1.8 * s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Lv.13: 火星緑化・テラフォーミング都市（環を持つ緑化惑星＆大気生成ビーム）
+    if (level >= 13) {
+      ctx.save();
+      const marsX = w * 0.88;
+      const marsY = Math.max(86 * s, groundY - 205 * s);
+      const marsR = 22 * s;
+      // テラフォーミングされた赤〜エメラルドの惑星
+      const pGrad = ctx.createLinearGradient(marsX - marsR, marsY - marsR, marsX + marsR, marsY + marsR);
+      pGrad.addColorStop(0, '#fb923c');
+      pGrad.addColorStop(0.5, '#10b981');
+      pGrad.addColorStop(1, '#0284c7');
+      ctx.fillStyle = pGrad;
+      ctx.beginPath();
+      ctx.arc(marsX, marsY, marsR, 0, Math.PI * 2);
+      ctx.fill();
+      // 惑星軌道リング
+      ctx.strokeStyle = 'rgba(167, 243, 208, 0.75)';
+      ctx.lineWidth = 2.2 * s;
+      ctx.beginPath();
+      ctx.ellipse(marsX, marsY, marsR * 1.65, marsR * 0.38, -0.35, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Lv.14: 軌道環・スペースコロニー（空を横断する巨大オービタル・スカイリング）
+    if (level >= 14) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(125, 211, 252, 0.45)';
+      ctx.lineWidth = 4 * s;
+      ctx.beginPath();
+      ctx.arc(w * 0.5, groundY + 260 * s, 430 * s, Math.PI * 1.18, Math.PI * 1.82);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(244, 114, 182, 0.55)';
+      ctx.lineWidth = 1.5 * s;
+      ctx.setLineDash([8 * s, 6 * s]);
+      ctx.beginPath();
+      ctx.arc(w * 0.5, groundY + 260 * s, 430 * s, Math.PI * 1.18, Math.PI * 1.82);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    // Lv.15: 木星軌道・フローティング都市（反重力プラズマ・メガスパイア群）
+    if (level >= 15) {
+      ctx.save();
+      const spireXs = [w * 0.07, w * 0.44, w * 0.93];
+      spireXs.forEach((sx, idx) => {
+        const sh = (142 + idx * 12) * s;
+        const g = ctx.createLinearGradient(sx, groundY - sh, sx, groundY);
+        g.addColorStop(0, '#c084fc');
+        g.addColorStop(0.5, '#6366f1');
+        g.addColorStop(1, 'rgba(15, 23, 42, 0.85)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(sx - 9 * s, groundY);
+        ctx.lineTo(sx, groundY - sh);
+        ctx.lineTo(sx + 9 * s, groundY);
+        ctx.closePath();
+        ctx.fill();
+        // 頂上のプラズマ球
+        ctx.fillStyle = '#f0abfc';
+        ctx.beginPath();
+        ctx.arc(sx, groundY - sh - 4 * s, (4 + Math.sin(now * 4 + idx) * 1.2) * s, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+
+    // Lv.16: 恒星間・ワープゲート都市（上空に輝く超空間ワープゲート・ポータル）
+    if (level >= 16) {
+      ctx.save();
+      const wgX = w * 0.50;
+      const wgY = Math.max(92 * s, groundY - 195 * s);
+      const wgR = 30 * s;
+      const pGrad = ctx.createRadialGradient(wgX, wgY, 2 * s, wgX, wgY, wgR);
+      pGrad.addColorStop(0, 'rgba(255, 255, 255, 0.90)');
+      pGrad.addColorStop(0.45, 'rgba(56, 189, 248, 0.55)');
+      pGrad.addColorStop(0.85, 'rgba(168, 85, 247, 0.35)');
+      pGrad.addColorStop(1, 'rgba(168, 85, 247, 0)');
+      ctx.fillStyle = pGrad;
+      ctx.beginPath();
+      ctx.arc(wgX, wgY, wgR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2 * s;
+      ctx.beginPath();
+      ctx.arc(wgX, wgY, wgR * 0.82, now, now + Math.PI * 1.4);
+      ctx.stroke();
+      ctx.strokeStyle = '#f472b6';
+      ctx.beginPath();
+      ctx.arc(wgX, wgY, wgR * 0.96, -now * 1.2, -now * 1.2 + Math.PI * 1.4);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Lv.17: ダイソン・スフィア文明（恒星エネルギーを包む黄金の幾何学リング構造体）
+    if (level >= 17) {
+      ctx.save();
+      const dsX = w * 0.50;
+      const dsY = Math.max(92 * s, groundY - 195 * s);
+      const dsR = 42 * s;
+      ctx.translate(dsX, dsY);
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.72)';
+      ctx.lineWidth = 1.8 * s;
+      for (let r = 0; r < 3; r++) {
+        ctx.save();
+        ctx.rotate(now * (0.3 + r * 0.15) + (r * Math.PI) / 3);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, dsR, dsR * 0.32, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    // Lv.18: 星雲・ネビュラクリスタル都市（七色の星雲オーロラ＆浮遊クリスタル・モノリス）
+    if (level >= 18) {
+      ctx.save();
+      // 天空のコズミック・オーロラリボン
+      const aurGrad = ctx.createLinearGradient(0, 60 * s, w, 120 * s);
+      aurGrad.addColorStop(0, 'rgba(45, 212, 191, 0.18)');
+      aurGrad.addColorStop(0.5, 'rgba(192, 132, 252, 0.24)');
+      aurGrad.addColorStop(1, 'rgba(244, 114, 182, 0.18)');
+      ctx.fillStyle = aurGrad;
+      ctx.beginPath();
+      ctx.moveTo(0, 95 * s);
+      for (let ax = 0; ax <= w; ax += 40) {
+        const ay = 85 * s + Math.sin(ax * 0.015 + now * 1.5) * 14 * s;
+        ctx.lineTo(ax, ay);
+      }
+      ctx.lineTo(w, 130 * s);
+      ctx.lineTo(0, 130 * s);
+      ctx.closePath();
+      ctx.fill();
+
+      // 浮遊クリスタル・モノリス
+      const monoXs = [w * 0.19, w * 0.81];
+      monoXs.forEach((mx, idx) => {
+        const my = groundY - 148 * s + Math.sin(now * 2.2 + idx) * 6 * s;
+        ctx.fillStyle = idx === 0 ? 'rgba(56, 189, 248, 0.78)' : 'rgba(232, 121, 249, 0.78)';
+        ctx.beginPath();
+        ctx.moveTo(mx, my - 16 * s);
+        ctx.lineTo(mx + 8 * s, my);
+        ctx.lineTo(mx, my + 16 * s);
+        ctx.lineTo(mx - 8 * s, my);
+        ctx.closePath();
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+
+    // Lv.19+: 高次元・クォンタム神都 ＆ Lv.20+: 銀河連邦・コズミック神都（レベルごとに星系コアが増加！）
+    if (level >= 19) {
+      ctx.save();
+      // 地平線に連なる黄金・虹色のクォンタム神殿ピラミッド光網
+      ctx.strokeStyle = 'rgba(253, 224, 71, 0.45)';
+      ctx.lineWidth = 1.4 * s;
+      for (let q = 0; q < 5; q++) {
+        const qx = w * (0.12 + q * 0.19);
+        ctx.beginPath();
+        ctx.moveTo(qx - 24 * s, groundY);
+        ctx.lineTo(qx, groundY - 155 * s);
+        ctx.lineTo(qx + 24 * s, groundY);
+        ctx.stroke();
+      }
+
+      // Lv.20以降: クリアするごとに空に新たな「銀河連邦の渦巻星系」が増え続ける（最大8星系表示）
+      if (level >= 20) {
+        const numGalaxies = Math.min(8, 1 + (level - 20));
+        for (let gIdx = 0; gIdx < numGalaxies; gIdx++) {
+          const gx = w * (0.10 + ((gIdx * 0.23) % 0.82));
+          const gy = (68 + (gIdx % 3) * 24) * s;
+          const gr = (10 + (gIdx % 2) * 4) * s;
+          const hue = (gIdx * 55 + now * 25) % 360;
+          ctx.save();
+          ctx.translate(gx, gy);
+          ctx.rotate(now * 0.8 + gIdx);
+          ctx.strokeStyle = `hsla(${hue}, 95%, 72%, 0.78)`;
+          ctx.lineWidth = 1.6 * s;
+          for (let arm = 0; arm < 2; arm++) {
+            ctx.rotate(Math.PI);
+            ctx.beginPath();
+            ctx.arc(gr * 0.35, 0, gr * 0.65, 0, Math.PI * 1.25);
+            ctx.stroke();
+          }
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(0, 0, 2.5 * s, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
       }
       ctx.restore();
     }
@@ -3902,13 +4220,9 @@ class RainGame {
     return Math.max(0.08, Math.min(1.0, rawHealth));
   }
 
-  // ★要件: 墨汁を取ったことによる木の墨汁汚染度（0.0 = 清浄 〜 1.0 = 重度汚染・不健全化）
+  // ★要件: 汚染された水をやった木は墨汁の量に比例して汚染され、墨汁のない水を与えれば徐々に浄化される
   getTreeInkPollution() {
-    const treeInk = this.state.treeInkLevel || 0;
-    const levelInk = this.state.levelInkDrops || 0;
-    const totalInk = this.state.inkDrops || 0;
-    if (treeInk <= 0 && levelInk <= 0 && totalInk <= 0) return 0;
-    return Math.min(1.0, treeInk * 0.35 + levelInk * 0.40 + Math.min(0.35, totalInk * 0.08));
+    return Math.min(1.0, Math.max(0, this.state.treeInkLevel || 0));
   }
 
   drawFibonacciTree(ctx) {
@@ -3922,16 +4236,57 @@ class RainGame {
     const unhealthy = 1.0 - health; // 0.0: 健康 〜 0.92: 極度に不健康
     const inkPollution = this.getTreeInkPollution(); // 0.0: 清浄 〜 1.0: 墨汁汚染
 
-    // 木の注ぎ後成長バウンス（ポヨンと弾んで育つ演出）
+    // ★要件: 木が大きく育っても画面処理が重くならないよう、オフスクリーンキャンバスに木をキャッシュして毎フレーム1回のdrawImageで超高速描画！
+    const availableH = Math.max(160, (groundY - 65) / scale);
+    const dpr = Math.min(2, this.dpr || 1);
+    const cacheHalfW = 280;
+    const cacheTopH = Math.ceil(availableH + 45);
+    const cacheBotH = 20;
+    const logicW = cacheHalfW * 2;
+    const logicH = cacheTopH + cacheBotH;
+    const cacheKey = `${level}_${Math.round(availableH)}_${Math.round(inkPollution * 20)}_${Math.round(unhealthy * 10)}_${dpr}`;
+
+    if (!this._treeCacheCanvas) {
+      this._treeCacheCanvas = document.createElement('canvas');
+    }
+    if (this._treeCacheKey !== cacheKey) {
+      this._treeCacheKey = cacheKey;
+      const cCanvas = this._treeCacheCanvas;
+      cCanvas.width = Math.ceil(logicW * dpr);
+      cCanvas.height = Math.ceil(logicH * dpr);
+      const cCtx = cCanvas.getContext('2d');
+      cCtx.setTransform(dpr, 0, 0, dpr, cacheHalfW * dpr, cacheTopH * dpr);
+      this.renderStaticFibonacciTree(cCtx, groundY, scale, level, unhealthy, inkPollution);
+    }
+
+    // 木の注ぎ後成長バウンス（ポヨンと弾んで育つ演出）とそよ風の揺れ
     let growthBounce = 1.0;
     if (this.treeGrowthAnim && this.treeGrowthAnim.active) {
       const p = this.treeGrowthAnim.timer / this.treeGrowthAnim.duration;
       growthBounce = 1.0 + Math.sin(p * Math.PI) * 0.24;
     }
+    const swayShear = Math.sin(performance.now() * 0.0016) * 0.018;
 
     ctx.save();
     ctx.translate(treeX, groundY);
     ctx.scale(scale * growthBounce, scale * growthBounce);
+
+    // キャッシュされた木を1回の drawImage で超高速描画（そよ風の優しい揺れ付き）
+    ctx.save();
+    ctx.transform(1, 0, swayShear, 1, 0, 0);
+    ctx.drawImage(this._treeCacheCanvas, -cacheHalfW, -cacheTopH, logicW, logicH);
+    ctx.restore();
+
+    // 木漏れ日の光胞子・花びらの舞い（軽量パーティクルのみ毎フレーム更新）
+    if ((level >= 10 || inkPollution >= 0.20) && this._cachedLeafTips) {
+      this.updateAndDrawTreePollen(ctx, this._cachedLeafTips, level, inkPollution);
+    }
+
+    ctx.restore();
+  }
+
+  renderStaticFibonacciTree(ctx, groundY, scale, level, unhealthy, inkPollution) {
+    ctx.save();
 
     // ä¸Šéƒ¨HUDï¼ˆy=55ä»˜è¿‘ï¼‰ã¨é‡ãªã‚‰ãªã„å®‰å…¨ãªåˆ©ç”¨å¯èƒ½é«˜ã•
     const availableH = Math.max(160, (groundY - 65) / scale);
@@ -3995,11 +4350,11 @@ class RainGame {
     ctx.fill();
 
     // é›¨é¢¨ã®å„ªã—ã„ãã‚ˆãŽ
-    const sway = Math.sin(performance.now() * 0.0016) * 0.024;
+    const sway = 0;
 
     // â˜…é‡è¦: ãƒ•ã‚£ãƒœãƒŠãƒƒãƒåˆ†å²ã®æ·±ã•ï¼ˆLevel 10ä»¥é™ã‚‚æœ€å¤§9ä¸–ä»£ã¾ã§ç·»å¯†ã«å¢—ãˆç¶šã‘ã‚‹ï¼ï¼‰
     // Lv1:1, Lv2:2, Lv4:3, Lv6:4, Lv9:5, Lv12:6, Lv16:7, Lv21:8, Lv27+:9ä¸–ä»£
-    const maxDepth = Math.min(1 + Math.floor(Math.sqrt(Math.max(0, level - 1) * 2.8)), 9);
+    const maxDepth = Math.min(1 + Math.floor(Math.sqrt(Math.max(0, level - 1) * 2.4)), 7);
 
     // åˆæœŸã®æžã®é•·ã•
     const initialBranchLen = Math.min(
@@ -4146,6 +4501,9 @@ class RainGame {
 
     // Layer 3: æ‰‹å‰ã®ç‘žã€…ã—ã„è‹¥è‘‰ãƒ»èŠ±ãƒ»é»„é‡‘ã®å®Ÿï¼ˆæžå…ˆã«å°ã¶ã‚Šã§ä¸Šå“ã«å’²ã‹ã›ã‚‹ï¼‰
     this.drawForegroundFoliage(ctx, leafTips, level, inkPollution, unhealthy);
+    this._cachedLeafTips = leafTips;
+    ctx.restore();
+    if (true) return;
 
     // â˜…é«˜ãƒ¬ãƒ™ãƒ«é™å®šæ¼”å‡º: æœ¨æ¼ã‚Œæ—¥ã®å…‰èƒžå­ãƒ»èŠ±ã³ã‚‰ã®èˆžã„ï¼ˆLv10ä»¥ä¸Šï¼‰
     if (level >= 10 || inkPollution >= 0.25) {
@@ -5045,18 +5403,16 @@ class RainGame {
     ctx.restore(); // 少女のローカル
   }
 
-  // 墨汁によるビーカー水の汚染比率（0.0 = 清浄 〜 1.0 = 重度汚染）を取得
+  // ★要件: ビーカーの水が墨汁の量に比例して汚染される（0滴=0.0, 1滴=0.25, 2滴=0.50, 3滴=0.75, 4滴以上=1.0）
   getInkRatio() {
-    const lvlInk = this.state.levelInkDrops || 0;
-    const treeInk = this.state.treeInkLevel || 0;
-    const totInk = this.state.inkDrops || 0;
-    if (lvlInk > 0) {
-      return Math.min(1.0, 0.45 + lvlInk * 0.25);
+    if (this.pourAnim && this.pourAnim.active && this.pourAnim.pouredInkDrops !== undefined) {
+      return Math.min(1.0, this.pourAnim.pouredInkDrops * 0.25);
     }
-    if (treeInk > 0 || this.state.currentBranch === 'dark') {
-      return Math.min(1.0, 0.35 + treeInk * 0.20 + Math.min(0.25, totInk * 0.05));
-    }
-    return 0.0;
+    const beakerInk = this.state.beakerInkDrops !== undefined
+      ? this.state.beakerInkDrops
+      : (this.state.levelInkDrops || 0);
+    if (beakerInk <= 0) return 0.0;
+    return Math.min(1.0, beakerInk * 0.25);
   }
 
   // 金色の雨粒の比率（0.0 〜 1.0）を取得
